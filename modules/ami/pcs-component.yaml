@@ -128,6 +128,13 @@ phases:
               cd /tmp
               rm -rf aws-efa-installer  aws-efa-installer-{{ EFAVersion }}.tar.gz
 
+      - name: InstallBuildTools
+        action: ExecuteBash
+        inputs:
+          commands:
+            - |
+              dnf install -y gcc gcc-gfortran gcc-c++ git make cmake autoconf automake libtool
+
       - name: InstallLustre
         action: ExecuteBash
         inputs:
