@@ -164,7 +164,7 @@ resource "awscc_pcs_compute_node_group" "x86" {
   ]
   scaling_configuration = {
     min_instance_count = 0,
-    max_instance_count  = 10
+    max_instance_count  = each.value == "hpc6a.48xlarge" ? 6 : 8
   }
   subnet_ids = [var.private_subnet_id]
   purchase_option = "ONDEMAND"
@@ -207,7 +207,7 @@ resource "awscc_pcs_compute_node_group" "arm" {
   ]
   scaling_configuration = {
     min_instance_count = 0,
-    max_instance_count  = 10
+    max_instance_count  = 8
   }
   subnet_ids = [var.private_subnet_id]
   purchase_option = "ONDEMAND"

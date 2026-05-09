@@ -45,7 +45,7 @@ variable "instance_login" {
 variable "instance_x86" {
   description = "Instance type of CPU X86_64 node(s)"
   type        = list
-  default     = ["hpc6a.48xlarge", "hpc7a.96xlarge"]
+  default     = ["hpc6a.48xlarge", "hpc7a.96xlarge", "hpc8a.96xlarge"]
 }
 
 variable "instance_arm" {

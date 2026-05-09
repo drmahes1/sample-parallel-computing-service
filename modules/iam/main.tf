@@ -46,6 +46,11 @@ resource "aws_iam_role_policy_attachment" "cloudwatch" {
   policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
 }
 
+resource "aws_iam_role_policy_attachment" "codecommit" {
+  role       = aws_iam_role.pcs_compute_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AWSCodeCommitPowerUser"
+}
+
 resource "aws_iam_instance_profile" "pcs_compute_profile" {
   role = aws_iam_role.pcs_compute_role.name
 }

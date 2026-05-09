@@ -43,5 +43,19 @@ terraform.rc
 # Uncomment the line below if you want to ignore planout files.
 # planout
 
+# Terraform lock file (platform-specific)
+.terraform.lock.hcl
+
+# Local logs and plans
+terraform.log
+terraform_destroy.log
+tfplan
+
+# Local user files (may contain sensitive data)
+users.ldif
+
+# Local notes
+TROUBLESHOOTING.md
+
 
 

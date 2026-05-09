@@ -127,6 +127,13 @@ resource "aws_fsx_openzfs_file_system" "fsxz" {
   delete_options      = ["DELETE_CHILD_VOLUMES_AND_SNAPSHOTS"]
   throughput_capacity = 2560
   security_group_ids = [aws_security_group.zfs.id]
+
+  # Ensure security group rules are created before the file system
+  depends_on = [
+    aws_vpc_security_group_ingress_rule.zfs_allow_ingress,
+    aws_vpc_security_group_egress_rule.zfs_allow_egress
+  ]
+
   root_volume_configuration {
     data_compression_type = "ZSTD"
     nfs_exports {
@@ -207,18 +214,28 @@ resource "aws_fsx_lustre_file_system" "fsxl" {
   data_compression_type = "LZ4"
   efa_enabled = true
   security_group_ids = [aws_security_group.fsxl.id]
-  storage_type = "INTELLIGENT_TIERING"
+  storage_type = "SSD"
+  storage_capacity = 4800
   subnet_ids = [var.private_subnet_id]
-  throughput_capacity = 4000
-
-  data_read_cache_configuration {
-    sizing_mode = "USER_PROVISIONED"
-    size = 20000
-  }
+  per_unit_storage_throughput = 1000
 
   metadata_configuration {
-    iops = 6000
-    mode = "USER_PROVISIONED"
+    mode = "AUTOMATIC"
+  }
+}
+
+resource "aws_fsx_data_repository_association" "lustre_s3" {
+  file_system_id       = aws_fsx_lustre_file_system.fsxl.id
+  file_system_path     = "/data"
+  data_repository_path = "s3://satheesh-ohio-hpc-bucket"
+
+  s3 {
+    auto_export_policy {
+      events = ["NEW", "CHANGED", "DELETED"]
+    }
+    auto_import_policy {
+      events = ["NEW", "CHANGED", "DELETED"]
+    }
   }
 }
 
