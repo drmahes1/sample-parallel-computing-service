@@ -5,7 +5,7 @@ variable "region" {
 variable "ldap_instance" {
   description = "LDAP server instance type"
   type = string
-  default = "t2.micro"
+  default = "t3.micro"
 }
 
 variable "ssh_key" {

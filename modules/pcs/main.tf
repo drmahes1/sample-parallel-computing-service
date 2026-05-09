@@ -23,7 +23,7 @@ locals {
 }
 
 resource "aws_launch_template" "pcs_login" {
-  name = "login-wx"
+  name_prefix = "pcs-login"
 
   metadata_options {
     http_endpoint               = "enabled"
@@ -100,7 +100,7 @@ data "aws_ec2_instance_type" "all" {
 
 resource "aws_launch_template" "pcs" {
   for_each = local.all_instances
-  name = "pcs-${each.value}"
+  name_prefix = "pcs-${each.value}"
 
   metadata_options {
     http_endpoint               = "enabled"
@@ -109,9 +109,9 @@ resource "aws_launch_template" "pcs" {
   }
 
   key_name = var.ssh_key
-
+  # Turn off SMT for non-HPC instances (HPC instances don't support CpuOptions)
   dynamic "cpu_options" {
-    for_each = can(regex("^hpc", each.value)) ? [] : [each.value]
+    for_each = startswith(each.value, "hpc") ? [] : [1]
     content {
       core_count       = local.cores[each.value]
       threads_per_core = 1
