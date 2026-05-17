@@ -288,6 +288,30 @@ phases:
               echo "AuthorizedKeysCommand /usr/bin/sss_ssh_authorizedkeys" >> /etc/ssh/sshd_config
               echo "AuthorizedKeysCommandUser nobody" >> /etc/ssh/sshd_config
 
+      - name: PublishPipelinePaths
+        # Publish absolute paths to GPU profiling tools shipped by the DLAMI
+        # so the gpu-benchmark-pipeline (sibling project) can source them
+        # without depending on PATH or per-host autodetection.
+        # Variables are env-only (no command execution) so the file is safe
+        # on the login node as well as compute nodes, even though the login
+        # node has no GPU hardware.
+        action: ExecuteBash
+        inputs:
+          commands:
+            - |
+              set -euo pipefail
+              cat > /etc/profile.d/pipeline-paths.sh << 'EOF'
+              # Cluster-published absolute paths for the gpu-benchmark-pipeline.
+              # Pipeline run scripts source this file at startup; do not edit
+              # by hand.
+              export PIPELINE_NSYS=/opt/nvidia/nsight-systems/2025.6.1/bin/nsys
+              export PIPELINE_NCU=/usr/local/cuda-12.9/bin/ncu
+              export PIPELINE_NVCC=/usr/local/cuda-12.9/bin/nvcc
+              export PIPELINE_CUDA_DEMO_SUITE=/usr/local/cuda-12.9/extras/demo_suite
+              export PIPELINE_DCGMI=/usr/bin/dcgmi
+              EOF
+              chmod 644 /etc/profile.d/pipeline-paths.sh
+
       - name: CleanupCloudInitState
         # CRITICAL: cloud-init caches per-instance state under
         # /var/lib/cloud/instances/<instance-id>. The Image Builder VM's
