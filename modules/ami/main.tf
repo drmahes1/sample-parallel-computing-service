@@ -49,11 +49,15 @@ resource "aws_imagebuilder_image" "wx_x86" {
   }
 }
 
+# Pinned DLAMI lookup.
+#
+# We pin by release date (YYYYMMDD) rather than using most_recent = true so
+# that benchmark runs are reproducible across `terraform apply` invocations.
+# Bump var.dlami_release_date deliberately.
 data "aws_ami" "dlami_x86" {
-  most_recent = true
   filter {
     name   = "name"
-    values = ["Deep Learning Base AMI with Single CUDA (Amazon Linux 2023) *"]
+    values = ["${var.dlami_base_name_prefix} ${var.dlami_release_date}"]
   }
   filter {
     name   = "virtualization-type"
@@ -73,7 +77,7 @@ resource "aws_imagebuilder_image_recipe" "wx_x86" {
 
       ebs {
         delete_on_termination = true
-        volume_size           = 50
+        volume_size           = 200
         volume_type           = "gp3"
       }
     }
@@ -108,7 +112,7 @@ resource "aws_imagebuilder_image_recipe" "wx_x86" {
 
   name         = "amazon-linux-wx-x86"
   parent_image = data.aws_ami.dlami_x86.id
-  version      = var.image_receipe_version
+  version      = "${var.image_receipe_version}.${parseint(local.recipe_version_suffix, 16) % 1000000}"
 }
 
 resource "aws_s3_object" "pcs_upload" {
@@ -118,14 +122,43 @@ resource "aws_s3_object" "pcs_upload" {
   etag = filemd5("${path.module}/pcs-component.yaml")
 }
 
+resource "aws_s3_object" "cwa_config" {
+  bucket = var.s3_bucket
+  key    = "cwa-config.json"
+  source = "${path.module}/cwa-config.json"
+  etag   = filemd5("${path.module}/cwa-config.json")
+}
+
+locals {
+  # Immutable Image Builder component/recipe versions are derived from content
+  # hashes. Any edit to the component yaml or the cwa config rolls the version
+  # automatically, which replaces the component/recipe and triggers a rebake.
+  # Without this, edits to pcs-component.yaml silently don't take effect
+  # because Image Builder re-uses the existing version.
+  component_version_suffix = substr(
+    filemd5("${path.module}/pcs-component.yaml"),
+    0,
+    8,
+  )
+  recipe_version_suffix = substr(
+    sha256(join("::", [
+      filemd5("${path.module}/pcs-component.yaml"),
+      filemd5("${path.module}/cwa-config.json"),
+    ])),
+    0,
+    8,
+  )
+}
+
 resource "aws_imagebuilder_component" "wx" {
   name       = "wx-pcs"
   platform   = "Linux"
   uri        = "s3://${var.s3_bucket}/pcs-component.yaml"
-  version    = "1.0.0"
+  version    = "1.0.${parseint(local.component_version_suffix, 16) % 1000000}"
 
   depends_on = [
-    aws_s3_object.pcs_upload
+    aws_s3_object.pcs_upload,
+    aws_s3_object.cwa_config,
   ]
 }
 

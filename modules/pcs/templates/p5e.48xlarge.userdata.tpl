@@ -7,6 +7,15 @@ MIME-Version: 1.0
 
 #!/bin/bash
 
+# Start CloudWatch Agent with the config the AMI already has pre-staged.
+# Only runs on compute node groups (not the login node, whose launch
+# template does not invoke this start command).
+/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+  -a fetch-config \
+  -m ec2 \
+  -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json \
+  -s || true
+
 modprobe lnet
 modprobe kefalnd ipif_name=enp105s0
 modprobe ksocklnd credits=2560

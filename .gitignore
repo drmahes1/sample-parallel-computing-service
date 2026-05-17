@@ -45,3 +45,7 @@ terraform.rc
 
 
 
+
+# User LDIF files may contain SSH public keys or other user info
+users.ldif
+*.ldif

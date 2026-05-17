@@ -95,38 +95,42 @@ locals {
 }
 
 resource "aws_security_group" "zfs" {
-  name = "aws_zfs_security_group"
-  vpc_id = var.vpc_id
+  name        = "aws_zfs_security_group"
+  vpc_id      = var.vpc_id
   description = "Security group for Amazon FSx OpenZFS file system"
 }
 
 resource "aws_vpc_security_group_ingress_rule" "zfs_allow_ingress" {
-  for_each = local.zfs_security_group_rules.ingress
+  for_each          = local.zfs_security_group_rules.ingress
   security_group_id = aws_security_group.zfs.id
   cidr_ipv4         = var.vpc_cidr
   from_port         = each.value.from_port
   ip_protocol       = each.value.ip_protocol
   to_port           = each.value.to_port
-  description = "Ingress rule for Amazon FSx OpenZFS"
+  description       = "Ingress rule for Amazon FSx OpenZFS"
 }
 
 resource "aws_vpc_security_group_egress_rule" "zfs_allow_egress" {
-  for_each = local.zfs_security_group_rules.egress
+  for_each          = local.zfs_security_group_rules.egress
   security_group_id = aws_security_group.zfs.id
   cidr_ipv4         = var.vpc_cidr
   from_port         = each.value.from_port
   ip_protocol       = each.value.ip_protocol
   to_port           = each.value.to_port
-  description = "Egress rule for Amazon FSx OpenZFS"
+  description       = "Egress rule for Amazon FSx OpenZFS"
 }
 
+# Right-sized for a learning/benchmarking cluster:
+# - SINGLE_AZ_1 (no HA)
+# - 256 GiB storage, 256 MB/s throughput.
+#   Valid SINGLE_AZ_1 throughput values: 64, 128, 256, 512, 1024, 2048, 3072, 4096.
 resource "aws_fsx_openzfs_file_system" "fsxz" {
-  storage_capacity    = 1024
+  storage_capacity    = 256
   subnet_ids          = [var.private_subnet_id]
-  deployment_type     = "SINGLE_AZ_HA_1"
+  deployment_type     = "SINGLE_AZ_1"
   delete_options      = ["DELETE_CHILD_VOLUMES_AND_SNAPSHOTS"]
-  throughput_capacity = 4096
-  security_group_ids = [aws_security_group.zfs.id]
+  throughput_capacity = 256
+  security_group_ids  = [aws_security_group.zfs.id]
   root_volume_configuration {
     data_compression_type = "ZSTD"
     nfs_exports {
@@ -139,8 +143,8 @@ resource "aws_fsx_openzfs_file_system" "fsxz" {
 }
 
 resource "aws_fsx_openzfs_volume" "sw" {
-  name = "sw"
-  parent_volume_id = aws_fsx_openzfs_file_system.fsxz.root_volume_id
+  name                  = "sw"
+  parent_volume_id      = aws_fsx_openzfs_file_system.fsxz.root_volume_id
   data_compression_type = "ZSTD"
   nfs_exports {
     client_configurations {
@@ -151,8 +155,8 @@ resource "aws_fsx_openzfs_volume" "sw" {
 }
 
 resource "aws_fsx_openzfs_volume" "home" {
-  name = "home"
-  parent_volume_id = aws_fsx_openzfs_file_system.fsxz.root_volume_id
+  name                  = "home"
+  parent_volume_id      = aws_fsx_openzfs_file_system.fsxz.root_volume_id
   data_compression_type = "ZSTD"
   nfs_exports {
     client_configurations {
@@ -163,57 +167,83 @@ resource "aws_fsx_openzfs_volume" "home" {
 }
 
 resource "aws_security_group" "fsxl" {
-  name = "aws_fsx_lustre_security_group"
-  vpc_id = var.vpc_id
+  name        = "aws_fsx_lustre_security_group"
+  vpc_id      = var.vpc_id
   description = "Security group for Amazon FSx Lustre file system"
 }
 
 resource "aws_vpc_security_group_ingress_rule" "fsxl_allow_ingress" {
-  for_each = local.fsxl_security_group_rules.ingress
+  for_each          = local.fsxl_security_group_rules.ingress
   security_group_id = aws_security_group.fsxl.id
   cidr_ipv4         = var.vpc_cidr
   from_port         = each.value.from_port
   ip_protocol       = each.value.ip_protocol
   to_port           = each.value.to_port
-  description = "Ingress rule for Amazon FSx Lustre"
+  description       = "Ingress rule for Amazon FSx Lustre"
 }
 
 resource "aws_vpc_security_group_ingress_rule" "fsxl_allow_ingress_efa" {
-  security_group_id = aws_security_group.fsxl.id
-  ip_protocol       = -1
-  referenced_security_group_id  = aws_security_group.fsxl.id
-  description = "Ingress rule for Amazon FSx Lustre"
+  security_group_id            = aws_security_group.fsxl.id
+  ip_protocol                  = -1
+  referenced_security_group_id = aws_security_group.fsxl.id
+  description                  = "Ingress rule for Amazon FSx Lustre"
 }
 
 resource "aws_vpc_security_group_egress_rule" "fsxl_allow_egress" {
-  for_each = local.fsxl_security_group_rules.egress
+  for_each          = local.fsxl_security_group_rules.egress
   security_group_id = aws_security_group.fsxl.id
   cidr_ipv4         = var.vpc_cidr
   from_port         = each.value.from_port
   ip_protocol       = each.value.ip_protocol
   to_port           = each.value.to_port
-  description = "Egress rule for Amazon FSx Lustre"
+  description       = "Egress rule for Amazon FSx Lustre"
 }
 
 resource "aws_vpc_security_group_egress_rule" "fsxl_allow_egress_efa" {
-  security_group_id = aws_security_group.fsxl.id
-  ip_protocol       = -1
-  referenced_security_group_id  = aws_security_group.fsxl.id
-  description = "Egress rule for Amazon FSx Lustre"
+  security_group_id            = aws_security_group.fsxl.id
+  ip_protocol                  = -1
+  referenced_security_group_id = aws_security_group.fsxl.id
+  description                  = "Egress rule for Amazon FSx Lustre"
 }
 
+# Lustre sizing notes
+# ------------------------------------------------------------------
+# With EFA enabled, PERSISTENT_2 + SSD + 125 MB/s/TiB requires a
+# minimum of 38400 GiB (~37.5 TiB), which is an order of magnitude
+# larger than we need and ~$3k/month. For a learning cluster we turn
+# EFA off here; compute node EFA interfaces still exist for NCCL etc,
+# we just don't use EFA as the Lustre transport. That lets us stay at
+# the 1200 GiB minimum capacity.
 resource "aws_fsx_lustre_file_system" "fsxl" {
-  deployment_type = "PERSISTENT_2"
-  data_compression_type = "LZ4"
-  efa_enabled = true
-  security_group_ids = [aws_security_group.fsxl.id]
-  storage_type = "SSD"
-  storage_capacity = 4800
-  subnet_ids = [var.private_subnet_id]
-  per_unit_storage_throughput = 1000
+  deployment_type             = "PERSISTENT_2"
+  data_compression_type       = "LZ4"
+  efa_enabled                 = false
+  security_group_ids          = [aws_security_group.fsxl.id]
+  storage_type                = "SSD"
+  storage_capacity            = 2400
+  subnet_ids                  = [var.private_subnet_id]
+  per_unit_storage_throughput = 125
 
   metadata_configuration {
     mode = "AUTOMATIC"
   }
 }
 
+# Bidirectional Data Repository Association.
+# Links /fsx/results on Lustre <-> s3://<benchmarking-bucket>/ root.
+# Content in /fsx/results/<name>/ appears in S3 as <name>/, no "results/" prefix in S3.
+resource "aws_fsx_data_repository_association" "results" {
+  file_system_id       = aws_fsx_lustre_file_system.fsxl.id
+  data_repository_path = "s3://${var.s3_bucket_benchmarking}"
+  file_system_path     = "/results"
+  batch_import_meta_data_on_create = true
+
+  s3 {
+    auto_import_policy {
+      events = ["NEW", "CHANGED", "DELETED"]
+    }
+    auto_export_policy {
+      events = ["NEW", "CHANGED", "DELETED"]
+    }
+  }
+}

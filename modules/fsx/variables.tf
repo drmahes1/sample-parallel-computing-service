@@ -7,18 +7,22 @@ variable "vpc_cidr" {
 }
 
 variable "public_subnet_id" {
-  type    = string
+  type = string
 }
 
 variable "private_subnet_id" {
-  type    = string
+  type = string
 }
 
 variable "public_cidr" {
-  type    = string
+  type = string
 }
 
 variable "private_cidr" {
-  type    = string
+  type = string
 }
 
+variable "s3_bucket_benchmarking" {
+  description = "S3 bucket to link to FSx Lustre /results subdir via a bidirectional DRA."
+  type        = string
+}

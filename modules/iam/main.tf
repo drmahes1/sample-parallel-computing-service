@@ -36,11 +36,6 @@ resource "aws_iam_role_policy_attachment" "ssm" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
-resource "aws_iam_role_policy_attachment" "s3_readonly" {
-  role       = aws_iam_role.pcs_compute_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"
-}
-
 resource "aws_iam_role_policy_attachment" "cloudwatch" {
   role       = aws_iam_role.pcs_compute_role.name
   policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"

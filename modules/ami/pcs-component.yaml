@@ -132,6 +132,45 @@ phases:
               cd /tmp
               rm -rf aws-efa-installer  aws-efa-installer-{{ EFAVersion }}.tar.gz
 
+      - name: EnableNonRootGPUProfiling
+        # Drop the NVIDIA driver restriction that blocks non-root users from
+        # reading GPU performance counters (required by ncu, nvprof, Nsight
+        # Compute in user jobs). Takes effect on first boot of the resulting
+        # AMI — the initramfs change doesn't apply inside the builder VM.
+        action: ExecuteBash
+        inputs:
+          commands:
+            - |
+              set -euo pipefail
+              mkdir -p /etc/modprobe.d
+              cat > /etc/modprobe.d/nvidia-profiling.conf << 'EOF'
+              options nvidia NVreg_RestrictProfilingToAdminUsers=0
+              EOF
+              dracut --force
+
+      - name: EnableDCGMOnBoot
+        # DLAMI installs DCGM (dcgmi / nv-hostengine binaries) but the systemd
+        # unit name varies across DCGM versions, and on some DLAMI releases
+        # no unit is shipped at all. Try a few known names; if none exists,
+        # log a warning and keep going — this step must not fail the bake.
+        # To enable DCGM later, run `systemctl enable --now <unit>` on a live
+        # node or bake an updated unit into the AMI.
+        action: ExecuteBash
+        inputs:
+          commands:
+            - |
+              set -uo pipefail
+              units=$(systemctl list-unit-files --no-legend | awk '{print $1}')
+              for candidate in nvidia-dcgm.service dcgm.service nv-hostengine.service nvidia-dcgm-exporter.service; do
+                if echo "$units" | grep -q "^${candidate}$"; then
+                  echo "Enabling $candidate"
+                  systemctl enable "$candidate"
+                  exit 0
+                fi
+              done
+              echo "INFO: no DCGM systemd unit found on this base AMI; skipping auto-enable."
+              exit 0
+
       - name: InstallLustre
         action: ExecuteBash
         inputs:
@@ -147,11 +186,24 @@ phases:
               dnf install -y amazon-efs-utils
 
       - name: InstallCloudWatchAgent
+        # Installs the binary only. The agent is NOT enabled/started at AMI
+        # bake time — compute node launch templates start it so login nodes
+        # (which reuse this AMI) do not push metrics.
         action: ExecuteBash
         inputs:
           commands:
             - |
               yum install -y amazon-cloudwatch-agent
+
+      - name: DownloadCloudWatchAgentConfig
+        # Drop the CWA config file (nvidia_gpu + cpu + mem) at the standard
+        # location. Compute-node userdata later runs `amazon-cloudwatch-agent-ctl`
+        # against this file to start the agent.
+        action: S3Download
+        inputs:
+          - source: s3://{{ BucketName }}/cwa-config.json
+            destination: /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+            overwrite: true
 
       - name: InstallPyxisEnroot
         action: ExecuteBash
@@ -235,5 +287,30 @@ phases:
               sed -i '/AuthorizedKeysCommand/d' /etc/ssh/sshd_config
               echo "AuthorizedKeysCommand /usr/bin/sss_ssh_authorizedkeys" >> /etc/ssh/sshd_config
               echo "AuthorizedKeysCommandUser nobody" >> /etc/ssh/sshd_config
+
+      - name: CleanupCloudInitState
+        # CRITICAL: cloud-init caches per-instance state under
+        # /var/lib/cloud/instances/<instance-id>. The Image Builder VM's
+        # instance-id leaks into the baked AMI via that cache. When a new
+        # instance boots from this AMI, cloud-init sees "instance-id matches
+        # cached data" and SKIPS first-boot modules including ssh_authkey,
+        # which leaves /home/ec2-user/.ssh/authorized_keys empty. Users then
+        # can't SSH in as ec2-user.
+        #
+        # Wiping the cache forces cloud-init to treat every boot as first-boot
+        # for the new instance. MUST be the last bake step so nothing after it
+        # repopulates the cache.
+        action: ExecuteBash
+        inputs:
+          commands:
+            - |
+              set -euxo pipefail
+              # Wipe cloud-init state so the AMI is a clean template.
+              cloud-init clean --logs --seed || true
+              rm -rf /var/lib/cloud/instances/* /var/lib/cloud/data/* /var/lib/cloud/sem/* || true
+              rm -f /var/log/cloud-init.log /var/log/cloud-init-output.log || true
+              # Host SSH keys get regenerated on first boot if missing, so
+              # clear these too to avoid every instance having the same keys.
+              rm -f /etc/ssh/ssh_host_* || true
 
 
