@@ -121,11 +121,11 @@ resource "aws_vpc_security_group_egress_rule" "zfs_allow_egress" {
 }
 
 resource "aws_fsx_openzfs_file_system" "fsxz" {
-  storage_capacity    = 1024
+  storage_capacity    = 64
   subnet_ids          = [var.private_subnet_id]
-  deployment_type     = "SINGLE_AZ_HA_2"
+  deployment_type     = "SINGLE_AZ_1"
   delete_options      = ["DELETE_CHILD_VOLUMES_AND_SNAPSHOTS"]
-  throughput_capacity = 2560
+  throughput_capacity = 64
   security_group_ids = [aws_security_group.zfs.id]
 
   # Ensure security group rules are created before the file system
